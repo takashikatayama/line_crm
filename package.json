@@ -1,0 +1,15 @@
+{
+  "name": "line-management",
+  "version": "0.1.0",
+  "description": "LINE webhook server — echo bot + event storage + dashboard",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^7",
+    "better-sqlite3": "^9",
+    "dotenv": "^16",
+    "express": "^4"
+  }
+}
