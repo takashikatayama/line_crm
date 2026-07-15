@@ -9,26 +9,62 @@
     body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; padding: 24px; }
     h1 { font-size: 1.4rem; margin-bottom: 20px; }
     h2 { font-size: 1rem; margin-bottom: 10px; color: #555; }
+    h3 { font-size: .9rem; margin: 16px 0 8px; color: #555; }
     .stat { font-size: 2.5rem; font-weight: 700; color: #06c755; margin-bottom: 4px; }
     .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .stats-row { display: flex; gap: 20px; }
+    .stats-row .card { flex: 1; }
     table { width: 100%; border-collapse: collapse; font-size: .875rem; }
     th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #eee; color: #888; font-weight: 600; }
     td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
     tr:last-child td { border-bottom: none; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover td { background: #f8faf8; }
     .empty { color: #aaa; font-size: .875rem; padding: 12px 0; }
     .refresh { float: right; font-size: .8rem; color: #aaa; }
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4);
+      align-items: flex-start; justify-content: center; padding: 40px 20px; overflow-y: auto;
+    }
+    .modal {
+      background: #fff; border-radius: 8px; padding: 24px; width: 100%; max-width: 560px;
+      position: relative; box-shadow: 0 4px 20px rgba(0,0,0,.2);
+    }
+    .modal-close {
+      position: absolute; top: 16px; right: 16px; border: none; background: none;
+      font-size: 1.4rem; line-height: 1; cursor: pointer; color: #888;
+    }
+    .modal-sub { color: #888; font-size: .8rem; margin-bottom: 16px; word-break: break-all; }
+    .modal-stats { display: flex; gap: 24px; margin-bottom: 8px; }
+    .modal-stat-label { display: block; font-size: .75rem; color: #888; }
+    .stats-row .card.clickable { cursor: pointer; }
+    .stats-row .card.clickable:hover { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
   </style>
 </head>
 <body>
   <h1>LINE Dashboard <span class="refresh" id="updated"></span></h1>
 
-  <div class="card">
-    <h2>Followers</h2>
-    <div class="stat" id="follower-count">—</div>
+  <div class="stats-row">
+    <div class="card clickable" id="card-followers">
+      <h2>Followers</h2>
+      <div class="stat" id="follower-count">—</div>
+    </div>
+    <div class="card clickable" id="card-new-followers">
+      <h2>New (30d)</h2>
+      <div class="stat" id="new-follower-count">—</div>
+    </div>
+    <div class="card clickable" id="card-messages">
+      <h2>Messages (total)</h2>
+      <div class="stat" id="message-count">—</div>
+    </div>
+    <div class="card">
+      <h2>FAQ hit rate</h2>
+      <div class="stat" id="faq-hit-rate">—</div>
+    </div>
   </div>
 
   <div class="card">
-    <h2>Customer List</h2>
+    <h2>Customer List <span style="font-weight:400;color:#aaa;">(click a row for details)</span></h2>
     <div id="customers"><p class="empty">Loading…</p></div>
   </div>
 
@@ -37,33 +73,177 @@
     <div id="messages"><p class="empty">Loading…</p></div>
   </div>
 
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <button class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+      <h2 id="modal-name">—</h2>
+      <p class="modal-sub" id="modal-id"></p>
+      <div class="modal-stats">
+        <div><span class="modal-stat-label">Followed</span><span id="modal-followed"></span></div>
+        <div><span class="modal-stat-label">Messages</span><span id="modal-message-count"></span></div>
+        <div><span class="modal-stat-label">FAQ hit rate</span><span id="modal-faq-rate"></span></div>
+        <div><span class="modal-stat-label">Segment</span><span id="modal-topic-tag"></span></div>
+      </div>
+      <h3>Message history</h3>
+      <div id="modal-messages"><p class="empty">Loading…</p></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="list-modal-overlay">
+    <div class="modal" style="max-width:720px;">
+      <button class="modal-close" id="list-modal-close" aria-label="Close">&times;</button>
+      <h2 id="list-modal-title">—</h2>
+      <p class="modal-sub">Click a row for that customer's full detail.</p>
+      <div id="list-modal-body"><p class="empty">Loading…</p></div>
+    </div>
+  </div>
+
   <script>
     function fmt(ts) {
-      return new Date(ts).toLocaleString();
+      return ts ? new Date(ts).toLocaleString() : '—';
+    }
+
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return '—';
+      return String(value).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
     }
 
     function renderTable(headers, rows, emptyText) {
-      if (!rows.length) return `<p class="empty">${emptyText}</p>`;
-      const ths = headers.map(h => `<th>${h}</th>`).join('');
-      const trs = rows.map(r => `<tr>${r.map(c => `<td>${c ?? '—'}</td>`).join('')}</tr>`).join('');
+      if (!rows.length) return `<p class="empty">${escapeHtml(emptyText)}</p>`;
+      const ths = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('');
+      const trs = rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
       return `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
     }
 
+    function renderCustomersTable(customers) {
+      if (!customers.length) return '<p class="empty">No followers yet.</p>';
+      const rows = customers.map(c => `
+        <tr class="clickable" data-user-id="${escapeHtml(c.user_id)}">
+          <td>${escapeHtml(c.user_id)}</td>
+          <td>${escapeHtml(c.display_name)}</td>
+          <td>${fmt(c.followed_at)}</td>
+        </tr>
+      `).join('');
+      return `<table><thead><tr><th>User ID</th><th>Display Name</th><th>Followed At</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    let lastCustomers = [];
+
+    function renderInsightList(customers) {
+      if (!customers.length) return '<p class="empty">No customers in this view.</p>';
+      const rows = customers.map(c => `
+        <tr class="clickable" data-user-id="${escapeHtml(c.user_id)}">
+          <td>${escapeHtml(c.display_name)}</td>
+          <td>${fmt(c.followed_at)}</td>
+          <td>${escapeHtml(c.message_count)}</td>
+          <td>${c.faq_hit_rate === null ? '—' : escapeHtml(c.faq_hit_rate + '%')}</td>
+          <td>${escapeHtml(c.topic_tag)}</td>
+        </tr>
+      `).join('');
+      return `<table><thead><tr><th>Display Name</th><th>Followed At</th><th>Messages</th><th>FAQ hit rate</th><th>Segment</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function openList(kind) {
+      let title, list;
+      if (kind === 'followers') {
+        title = 'All Followers';
+        list = lastCustomers;
+      } else if (kind === 'new30d') {
+        title = 'New Followers (30d)';
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        list = lastCustomers.filter(c => new Date(c.followed_at) >= thirtyDaysAgo);
+      } else {
+        title = 'Customers by Message Count';
+        list = [...lastCustomers].sort((a, b) => b.message_count - a.message_count);
+      }
+      document.getElementById('list-modal-title').textContent = title;
+      document.getElementById('list-modal-body').innerHTML = renderInsightList(list);
+      document.getElementById('list-modal-overlay').style.display = 'flex';
+    }
+
+    document.getElementById('card-followers').addEventListener('click', () => openList('followers'));
+    document.getElementById('card-new-followers').addEventListener('click', () => openList('new30d'));
+    document.getElementById('card-messages').addEventListener('click', () => openList('messages'));
+
+    document.getElementById('list-modal-body').addEventListener('click', (e) => {
+      const row = e.target.closest('tr[data-user-id]');
+      if (row) {
+        document.getElementById('list-modal-overlay').style.display = 'none';
+        openCustomer(row.dataset.userId);
+      }
+    });
+
+    document.getElementById('list-modal-close').addEventListener('click', () => {
+      document.getElementById('list-modal-overlay').style.display = 'none';
+    });
+    document.getElementById('list-modal-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'list-modal-overlay') e.currentTarget.style.display = 'none';
+    });
+
+    async function openCustomer(userId) {
+      const overlay = document.getElementById('modal-overlay');
+      overlay.style.display = 'flex';
+      document.getElementById('modal-name').textContent = 'Loading…';
+      document.getElementById('modal-id').textContent = '';
+      document.getElementById('modal-followed').textContent = '';
+      document.getElementById('modal-message-count').textContent = '';
+      document.getElementById('modal-faq-rate').textContent = '';
+      document.getElementById('modal-topic-tag').textContent = '';
+      document.getElementById('modal-messages').innerHTML = '<p class="empty">Loading…</p>';
+
+      try {
+        const res = await fetch('/api/customers/' + encodeURIComponent(userId));
+        if (!res.ok) {
+          document.getElementById('modal-name').textContent = 'Not found';
+          return;
+        }
+        const data = await res.json();
+        document.getElementById('modal-name').textContent = data.customer.display_name || '(no name)';
+        document.getElementById('modal-id').textContent = data.customer.user_id;
+        document.getElementById('modal-followed').textContent = fmt(data.customer.followed_at);
+        document.getElementById('modal-message-count').textContent = data.messageCount;
+        document.getElementById('modal-faq-rate').textContent = data.faqHitRate === null ? '—' : data.faqHitRate + '%';
+        document.getElementById('modal-topic-tag').textContent = data.topicTag;
+        document.getElementById('modal-messages').innerHTML = renderTable(
+          ['Message', 'Time', 'FAQ matched'],
+          data.messages.map(m => [m.text, fmt(m.timestamp), m.faq_matched ? 'Yes' : 'No']),
+          'No messages yet.'
+        );
+      } catch (e) {
+        console.error(e);
+        document.getElementById('modal-name').textContent = 'Error loading customer';
+      }
+    }
+
+    document.getElementById('customers').addEventListener('click', (e) => {
+      const row = e.target.closest('tr[data-user-id]');
+      if (row) openCustomer(row.dataset.userId);
+    });
+
+    document.getElementById('modal-close').addEventListener('click', () => {
+      document.getElementById('modal-overlay').style.display = 'none';
+    });
+    document.getElementById('modal-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'modal-overlay') e.currentTarget.style.display = 'none';
+    });
+
     async function load() {
       try {
-        const { followerCount, customers, messages } = await fetch('/api/stats').then(r => r.json());
+        const { followerCount, newFollowerCount, messageCount, faqHitRate, customers, messages } = await fetch('/api/stats').then(r => r.json());
 
         document.getElementById('follower-count').textContent = followerCount;
+        document.getElementById('new-follower-count').textContent = newFollowerCount;
+        document.getElementById('message-count').textContent = messageCount;
+        document.getElementById('faq-hit-rate').textContent = faqHitRate === null ? '—' : faqHitRate + '%';
 
-        document.getElementById('customers').innerHTML = renderTable(
-          ['User ID', 'Display Name', 'Followed At'],
-          customers.map(c => [c.user_id, c.display_name, fmt(c.followed_at)]),
-          'No followers yet.'
-        );
+        lastCustomers = customers;
+        document.getElementById('customers').innerHTML = renderCustomersTable(customers);
 
         document.getElementById('messages').innerHTML = renderTable(
-          ['User ID', 'Message', 'Time'],
-          messages.map(m => [m.user_id, m.text, fmt(m.timestamp)]),
+          ['From', 'Message', 'Time'],
+          messages.map(m => [m.display_name || m.user_id, m.text, fmt(m.timestamp)]),
           'No messages yet.'
         );
 

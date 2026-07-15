@@ -17,10 +17,12 @@ moment our webhook goes live — there is no historical backfill.
 
 ## Where we are
 The echo bot (webhook receive → reply) is proven working on the OSM test
-account — see readme.md §2 "Current status". That's the seed the hardened
-`server/webhook` module grows from in Phase 1, Step 2. Check readme.md §7 for
-the current step before picking up new work; steps are meant to be finished
-and verified in order.
+account — see readme.md §2 "Current status". The client has approved a
+**10-hour test-only prototype** (readme.md §2.1) that supersedes the §7
+step-by-step plan for now: plain Node.js + SQLite, no TS monorepo, no auth,
+view-only customer list, basic dashboard. Build that prototype first: verify
+its "done when"s, log actual hours spent, then return to §7's full Phase 1
+plan (which still assumes Postgres + the full repo structure in §5).
 
 ## Working style for Claude Code in this repo
 - Build one Phase 1 step at a time, in the order listed in readme.md §7.

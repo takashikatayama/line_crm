@@ -34,6 +34,50 @@ a rewrite.
 
 ---
 
+## 2.1 Current sprint: 10-hour test prototype (decided 2026-07-14/15)
+
+Client (Takashi) approved a **~10-hour, test-only prototype** to demo before
+committing to the full Phase 1 plan in §7. This sprint **supersedes §7's
+step-by-step plan for now** — it cuts across several of those steps at reduced
+scope. §7 remains the reference for the real Phase 1 build once this prototype
+is reviewed. **Actual hours spent should be logged and compared to the 10h
+estimate** — that comparison is explicitly wanted for the retro.
+
+Deliverable is meant to be **handed off to 片山 (Katayama)** afterward as data/
+documentation, so keep it self-explanatory (see the handoff doc requirement
+below).
+
+**In scope (~10h budget):**
+- Environment setup + **SQLite** (~1.5h) — local only, no server setup, to save
+  time. This is a deliberate, temporary deviation from §4's Postgres choice —
+  revisit before any real deploy.
+- LINE webhook receive → DB accumulation: follow events + messages (~2h)
+- DB schema (customers/friends, messages) (~1h)
+- Customer list, **view-only** (~2.5h)
+- Basic dashboard: friend count, new friends, message count (~2h)
+- Buffer + a simple handoff doc (~1h)
+
+**Explicitly out of scope this round:**
+karte editing, custom fields, search/filter/CSV export, chat (human or AI),
+source/流入元 attribution, auth, production deploy.
+
+**Added mid-sprint (still in scope):** a small rule-based FAQ auto-reply
+(`faqs.json` keyword → canned answer, no LLM) replaces the plain echo for
+incoming messages. An AI fallback for anything the FAQ doesn't match was
+requested but is **not** built — it's genuinely Phase 3 scope (§6, needs §9
+Q4 LLM policy/budget answered, and a queued/push-message reply path since the
+webhook must stay 200-fast per §8). Revisit once Phase 3 is actually picked up.
+Also added: click-through insight lists (per-card drill-down) and a
+rule-based conversation "segment" tag per customer (FAQ-category keyword
+match, no NLP) — both still view-only, no new external setup required.
+
+**Retro (calibration figure for Phases 2–4 estimates):** actual time spent
+was **~5–8 hours**, faster than the 10h budget — done as of 2026-07-16, live
+end-to-end with real LINE accounts (including someone other than the
+requester) via ngrok. See `TEST_PLAN.md` for what was verified.
+
+---
+
 ## 3. Target architecture
 
 ```
