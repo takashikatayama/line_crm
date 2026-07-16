@@ -39,26 +39,93 @@
     .modal-stat-label { display: block; font-size: .75rem; color: #888; }
     .stats-row .card.clickable { cursor: pointer; }
     .stats-row .card.clickable:hover { box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+    .memo-box {
+      width: 100%; min-height: 70px; font: inherit; padding: 8px 10px; border: 1px solid #ddd;
+      border-radius: 6px; resize: vertical;
+    }
+    .memo-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+    .memo-status { font-size: .8rem; color: #06c755; }
+    #modal-memo-save {
+      background: #06c755; color: #fff; border: none; border-radius: 6px; padding: 6px 16px;
+      font-size: .85rem; cursor: pointer;
+    }
+    #modal-memo-save:hover { background: #05a648; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark {
+      width: 36px; height: 36px; border-radius: 8px; background: #06c755; color: #fff;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .7rem;
+    }
+    .brand-name { font-weight: 700; font-size: 1rem; }
+    .brand-sub { font-size: .75rem; color: #888; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; font-size: .75rem; color: #06c755;
+      background: #e6f7ec; padding: 4px 10px; border-radius: 999px;
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #06c755; }
+    #refresh-now {
+      background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px;
+      font-size: .8rem; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    }
+    #refresh-now:hover { background: #f5f5f5; }
+    .subheader { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20px; }
+    .subheader h1 { font-size: 1.3rem; }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+    .card-icon {
+      width: 32px; height: 32px; border-radius: 8px; background: #e6f7ec; color: #06c755;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .card-icon svg { width: 18px; height: 18px; }
   </style>
 </head>
 <body>
-  <h1>LINE Dashboard <span class="refresh" id="updated"></span></h1>
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">OSM</div>
+      <div>
+        <div class="brand-name">OSM Hair Water</div>
+        <div class="brand-sub">LINE-first CRM (test prototype)</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span class="badge"><span class="badge-dot"></span>テスト運用中</span>
+      <button id="refresh-now">↻ 最新を反映</button>
+    </div>
+  </div>
+
+  <div class="subheader">
+    <h1>ダッシュボード</h1>
+    <span class="refresh" id="updated"></span>
+  </div>
 
   <div class="stats-row">
     <div class="card clickable" id="card-followers">
-      <h2>Followers</h2>
+      <div class="card-head">
+        <h2>Followers</h2>
+        <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"></circle><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M16 14c2.8 0 5 2 5.5 5"></path></svg></span>
+      </div>
       <div class="stat" id="follower-count">—</div>
     </div>
     <div class="card clickable" id="card-new-followers">
-      <h2>New (30d)</h2>
+      <div class="card-head">
+        <h2>New (30d)</h2>
+        <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="4"></circle><path d="M2 20c0-4 3.5-7 8-7s8 3 8 7"></path><line x1="19" y1="4" x2="19" y2="10"></line><line x1="16" y1="7" x2="22" y2="7"></line></svg></span>
+      </div>
       <div class="stat" id="new-follower-count">—</div>
     </div>
     <div class="card clickable" id="card-messages">
-      <h2>Messages (total)</h2>
+      <div class="card-head">
+        <h2>Messages (total)</h2>
+        <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v11H8l-4 4z"></path></svg></span>
+      </div>
       <div class="stat" id="message-count">—</div>
     </div>
-    <div class="card">
-      <h2>FAQ hit rate</h2>
+    <div class="card clickable" id="card-faq-rate">
+      <div class="card-head">
+        <h2>FAQ hit rate</h2>
+        <span class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 12.5l2.5 2.5 5-5.5"></path></svg></span>
+      </div>
       <div class="stat" id="faq-hit-rate">—</div>
     </div>
   </div>
@@ -83,6 +150,12 @@
         <div><span class="modal-stat-label">Messages</span><span id="modal-message-count"></span></div>
         <div><span class="modal-stat-label">FAQ hit rate</span><span id="modal-faq-rate"></span></div>
         <div><span class="modal-stat-label">Segment</span><span id="modal-topic-tag"></span></div>
+      </div>
+      <h3>Memo</h3>
+      <textarea id="modal-memo" class="memo-box" placeholder="スタッフメモ（社内用）"></textarea>
+      <div class="memo-actions">
+        <span class="memo-status" id="modal-memo-status"></span>
+        <button id="modal-memo-save">保存</button>
       </div>
       <h3>Message history</h3>
       <div id="modal-messages"><p class="empty">Loading…</p></div>
@@ -163,9 +236,46 @@
       document.getElementById('list-modal-overlay').style.display = 'flex';
     }
 
+    function renderFaqInsight(data) {
+      const catRows = data.categoryBreakdown.length
+        ? data.categoryBreakdown.map(c => `<tr><td>${escapeHtml(c.category)}</td><td>${escapeHtml(c.count)}</td></tr>`).join('')
+        : '<tr><td colspan="2" class="empty">まだデータがありません</td></tr>';
+
+      const unmatchedRows = data.unmatchedMessages.length
+        ? data.unmatchedMessages.map(m => `
+            <tr class="clickable" data-user-id="${escapeHtml(m.user_id)}">
+              <td>${escapeHtml(m.display_name || m.user_id)}</td>
+              <td>${escapeHtml(m.text)}</td>
+              <td>${fmt(m.timestamp)}</td>
+            </tr>
+          `).join('')
+        : '<tr><td colspan="3" class="empty">未対応メッセージはありません</td></tr>';
+
+      return `
+        <h3>カテゴリ別ヒット数（一致 ${escapeHtml(data.matchedCount)} / 全 ${escapeHtml(data.totalMessages)} 件）</h3>
+        <table><thead><tr><th>カテゴリ</th><th>件数</th></tr></thead><tbody>${catRows}</tbody></table>
+        <h3 style="margin-top:20px;">FAQ不一致メッセージ（直近${escapeHtml(data.unmatchedMessages.length)}件・要対応の可能性）</h3>
+        <table><thead><tr><th>From</th><th>Message</th><th>Time</th></tr></thead><tbody>${unmatchedRows}</tbody></table>
+      `;
+    }
+
+    async function openFaqInsight() {
+      document.getElementById('list-modal-title').textContent = 'FAQ Insight';
+      document.getElementById('list-modal-body').innerHTML = '<p class="empty">Loading…</p>';
+      document.getElementById('list-modal-overlay').style.display = 'flex';
+      try {
+        const data = await fetch('/api/faq-insight').then(r => r.json());
+        document.getElementById('list-modal-body').innerHTML = renderFaqInsight(data);
+      } catch (e) {
+        console.error(e);
+        document.getElementById('list-modal-body').innerHTML = '<p class="empty">読み込みに失敗しました</p>';
+      }
+    }
+
     document.getElementById('card-followers').addEventListener('click', () => openList('followers'));
     document.getElementById('card-new-followers').addEventListener('click', () => openList('new30d'));
     document.getElementById('card-messages').addEventListener('click', () => openList('messages'));
+    document.getElementById('card-faq-rate').addEventListener('click', openFaqInsight);
 
     document.getElementById('list-modal-body').addEventListener('click', (e) => {
       const row = e.target.closest('tr[data-user-id]');
@@ -182,7 +292,10 @@
       if (e.target.id === 'list-modal-overlay') e.currentTarget.style.display = 'none';
     });
 
+    let currentUserId = null;
+
     async function openCustomer(userId) {
+      currentUserId = userId;
       const overlay = document.getElementById('modal-overlay');
       overlay.style.display = 'flex';
       document.getElementById('modal-name').textContent = 'Loading…';
@@ -191,6 +304,8 @@
       document.getElementById('modal-message-count').textContent = '';
       document.getElementById('modal-faq-rate').textContent = '';
       document.getElementById('modal-topic-tag').textContent = '';
+      document.getElementById('modal-memo').value = '';
+      document.getElementById('modal-memo-status').textContent = '';
       document.getElementById('modal-messages').innerHTML = '<p class="empty">Loading…</p>';
 
       try {
@@ -206,6 +321,7 @@
         document.getElementById('modal-message-count').textContent = data.messageCount;
         document.getElementById('modal-faq-rate').textContent = data.faqHitRate === null ? '—' : data.faqHitRate + '%';
         document.getElementById('modal-topic-tag').textContent = data.topicTag;
+        document.getElementById('modal-memo').value = data.customer.memo || '';
         document.getElementById('modal-messages').innerHTML = renderTable(
           ['Message', 'Time', 'FAQ matched'],
           data.messages.map(m => [m.text, fmt(m.timestamp), m.faq_matched ? 'Yes' : 'No']),
@@ -220,6 +336,24 @@
     document.getElementById('customers').addEventListener('click', (e) => {
       const row = e.target.closest('tr[data-user-id]');
       if (row) openCustomer(row.dataset.userId);
+    });
+
+    document.getElementById('modal-memo-save').addEventListener('click', async () => {
+      if (!currentUserId) return;
+      const status = document.getElementById('modal-memo-status');
+      const memo = document.getElementById('modal-memo').value;
+      status.textContent = '保存中…';
+      try {
+        const res = await fetch('/api/customers/' + encodeURIComponent(currentUserId), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memo }),
+        });
+        status.textContent = res.ok ? '保存しました' : '保存に失敗しました';
+      } catch (e) {
+        console.error(e);
+        status.textContent = '保存に失敗しました';
+      }
     });
 
     document.getElementById('modal-close').addEventListener('click', () => {
@@ -252,6 +386,8 @@
         console.error(e);
       }
     }
+
+    document.getElementById('refresh-now').addEventListener('click', load);
 
     load();
     setInterval(load, 10000); // auto-refresh every 10 s

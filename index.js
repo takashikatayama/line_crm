@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 const db = require('./db');
-const { matchFaq, topicTagFromMessages } = require('./faq');
+const { matchFaq, matchFaqCategory, topicTagFromMessages } = require('./faq');
 
 const lineConfig = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -177,9 +177,57 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+app.use(express.json());
+
+const updateMemo = db.prepare('UPDATE customers SET memo = @memo WHERE user_id = @userId');
+
+app.patch('/api/customers/:userId', (req, res) => {
+  const customer = db.prepare('SELECT user_id FROM customers WHERE user_id = ?').get(req.params.userId);
+  if (!customer) return res.status(404).json({ error: 'not found' });
+
+  if (typeof req.body.memo !== 'string') {
+    return res.status(400).json({ error: 'memo must be a string' });
+  }
+  updateMemo.run({ userId: req.params.userId, memo: req.body.memo });
+  res.json({ ok: true });
+});
+
+app.get('/api/faq-insight', (req, res) => {
+  const messages = db
+    .prepare(`
+      SELECT messages.user_id, customers.display_name, messages.text, messages.timestamp
+      FROM messages
+      LEFT JOIN customers ON customers.user_id = messages.user_id
+      ORDER BY messages.id DESC
+    `)
+    .all();
+
+  const categoryCounts = {};
+  const unmatchedMessages = [];
+  for (const m of messages) {
+    const category = matchFaqCategory(m.text);
+    if (category) {
+      categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+    } else {
+      unmatchedMessages.push(m);
+    }
+  }
+
+  const categoryBreakdown = Object.entries(categoryCounts)
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+
+  res.json({
+    totalMessages: messages.length,
+    matchedCount: messages.length - unmatchedMessages.length,
+    categoryBreakdown,
+    unmatchedMessages: unmatchedMessages.slice(0, 50),
+  });
+});
+
 app.get('/api/customers/:userId', (req, res) => {
   const customer = db
-    .prepare('SELECT user_id, display_name, followed_at, unfollowed_at FROM customers WHERE user_id = ?')
+    .prepare('SELECT user_id, display_name, followed_at, unfollowed_at, memo FROM customers WHERE user_id = ?')
     .get(req.params.userId);
 
   if (!customer) return res.status(404).json({ error: 'not found' });

@@ -21,11 +21,16 @@ db.exec(`
   );
 `);
 
-const hasFaqMatchedColumn = db
-  .prepare("SELECT 1 FROM pragma_table_info('messages') WHERE name = 'faq_matched'")
-  .get();
-if (!hasFaqMatchedColumn) {
-  db.exec('ALTER TABLE messages ADD COLUMN faq_matched INTEGER NOT NULL DEFAULT 0');
+function addColumnIfMissing(table, column, definition) {
+  const exists = db
+    .prepare(`SELECT 1 FROM pragma_table_info('${table}') WHERE name = ?`)
+    .get(column);
+  if (!exists) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
 }
+
+addColumnIfMissing('messages', 'faq_matched', 'INTEGER NOT NULL DEFAULT 0');
+addColumnIfMissing('customers', 'memo', 'TEXT');
 
 module.exports = db;
