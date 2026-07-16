@@ -28,6 +28,18 @@ db.exec(`
     answer TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1
   );
+
+  CREATE TABLE IF NOT EXISTS custom_field_defs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+  );
+
+  CREATE TABLE IF NOT EXISTS custom_field_values (
+    user_id TEXT NOT NULL,
+    field_id INTEGER NOT NULL,
+    value TEXT,
+    PRIMARY KEY (user_id, field_id)
+  );
 `);
 
 function addColumnIfMissing(table, column, definition) {
@@ -43,6 +55,7 @@ addColumnIfMissing('messages', 'faq_matched', 'INTEGER NOT NULL DEFAULT 0');
 addColumnIfMissing('messages', 'handled', 'INTEGER NOT NULL DEFAULT 0');
 addColumnIfMissing('customers', 'memo', 'TEXT');
 addColumnIfMissing('customers', 'needs_follow_up', 'INTEGER NOT NULL DEFAULT 0');
+addColumnIfMissing('customers', 'tags', 'TEXT');
 
 // One-time seed: carry over the old faqs.json sample entries so existing
 // FAQ behavior doesn't disappear when switching to DB-backed management.
@@ -56,6 +69,15 @@ if (faqCount === 0) {
       insertFaq.run({ label: faq.label, keywords: faq.keywords.join(','), answer: faq.answer });
     }
   }
+}
+
+// Seed the two custom fields named explicitly in the original カルテ spec
+// (readme.md Step 5), so the feature isn't an empty shell out of the box.
+const customFieldCount = db.prepare('SELECT COUNT(*) AS n FROM custom_field_defs').get().n;
+if (customFieldCount === 0) {
+  const insertField = db.prepare('INSERT INTO custom_field_defs (name) VALUES (?)');
+  insertField.run('髪質・頭皮状態');
+  insertField.run('購入履歴');
 }
 
 module.exports = db;

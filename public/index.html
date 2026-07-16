@@ -106,6 +106,19 @@
     .faq-add-form input { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 8px; }
     .faq-add-form label { display: block; font-size: .75rem; color: #888; margin-bottom: 4px; }
     .faq-field { margin-bottom: 10px; }
+    .filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-row input, .filter-row select {
+      font: inherit; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: .85rem;
+    }
+    .filter-row input { flex: 1; min-width: 160px; }
+    #customer-csv-export {
+      background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px;
+      font-size: .85rem; cursor: pointer;
+    }
+    #customer-csv-export:hover { background: #f5f5f5; }
+    .custom-field-name { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; }
+    .custom-field-input { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; }
+    .custom-field-group label { display: block; font-size: .8rem; color: #555; margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -120,7 +133,7 @@
       </div>
       <button class="nav-item active" data-view="dashboard">ダッシュボード</button>
       <button class="nav-item" data-view="customers">お客様一覧</button>
-      <button class="nav-item" data-view="faq">FAQ管理</button>
+      <button class="nav-item" data-view="faq">設定</button>
     </nav>
 
     <main class="main">
@@ -178,16 +191,28 @@
           <span class="modal-sub" style="margin:0;">行をクリックすると詳細を表示します</span>
         </div>
         <div class="card">
+          <div class="filter-row">
+            <input type="text" id="customer-search" placeholder="名前・タグで検索">
+            <select id="customer-segment-filter">
+              <option value="">セグメント：すべて</option>
+            </select>
+            <select id="customer-status-filter">
+              <option value="">ステータス：すべて</option>
+              <option value="follow-up">要フォローのみ</option>
+            </select>
+            <button id="customer-csv-export">CSVエクスポート</button>
+          </div>
           <div id="customers"><p class="empty">Loading…</p></div>
         </div>
       </section>
 
       <section class="view" id="view-faq">
         <div class="subheader">
-          <h1>FAQ管理</h1>
-          <span class="modal-sub" style="margin:0;">キーワードに一致したメッセージへ自動返信します</span>
+          <h1>設定</h1>
+          <span class="modal-sub" style="margin:0;">FAQ自動応答とお客様のカスタム項目を管理します</span>
         </div>
         <div class="card">
+          <h2>FAQ管理 <span style="font-weight:400;color:#aaa;">（キーワードに一致したメッセージへ自動返信）</span></h2>
           <div id="faq-table-container"><p class="empty">Loading…</p></div>
           <div class="faq-add-form">
             <h3>新しいFAQを追加</h3>
@@ -199,6 +224,18 @@
             <textarea id="new-faq-answer" placeholder="お客様への返信文"></textarea>
             <div class="memo-actions" style="justify-content:flex-start; margin-top:10px;">
               <button id="new-faq-add">追加</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>カスタム項目管理 <span style="font-weight:400;color:#aaa;">（お客様一覧に表示する項目）</span></h2>
+          <div id="custom-field-table-container"><p class="empty">Loading…</p></div>
+          <div class="faq-add-form">
+            <h3>新しい項目を追加</h3>
+            <input type="text" id="new-custom-field-name" placeholder="例：アレルギー有無">
+            <div class="memo-actions" style="justify-content:flex-start; margin-top:10px;">
+              <button id="new-custom-field-add">追加</button>
             </div>
           </div>
         </div>
@@ -218,6 +255,9 @@
         <div><span class="modal-stat-label">Segment</span><span id="modal-topic-tag"></span></div>
       </div>
       <label class="follow-toggle"><input type="checkbox" id="modal-follow-up"> 要フォロー（このお客様に対応が必要）</label>
+      <h3>Tags</h3>
+      <input type="text" id="modal-tags" class="custom-field-input" placeholder="タグ（カンマ区切り、例：VIP,常連）">
+      <div id="modal-custom-fields"></div>
       <h3>Memo</h3>
       <textarea id="modal-memo" class="memo-box" placeholder="スタッフメモ（社内用）"></textarea>
       <div class="memo-actions">
@@ -272,11 +312,72 @@
           <td>${escapeHtml(c.message_count)}</td>
           <td>${c.faq_hit_rate === null ? '—' : escapeHtml(c.faq_hit_rate + '%')}</td>
           <td>${escapeHtml(c.topic_tag)}</td>
+          <td>${c.tags ? escapeHtml(c.tags) : '—'}</td>
           <td>${followBadge(c.needs_follow_up)}</td>
         </tr>
       `).join('');
-      return `<table><thead><tr><th>Display Name</th><th>Followed At</th><th>Messages</th><th>FAQ hit rate</th><th>Segment</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+      return `<table><thead><tr><th>Display Name</th><th>Followed At</th><th>Messages</th><th>FAQ hit rate</th><th>Segment</th><th>Tags</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
+
+    function applyCustomerFilters() {
+      const search = document.getElementById('customer-search').value.trim().toLowerCase();
+      const segment = document.getElementById('customer-segment-filter').value;
+      const status = document.getElementById('customer-status-filter').value;
+
+      const filtered = lastCustomers.filter(c => {
+        if (search) {
+          const haystack = `${c.display_name || ''} ${c.tags || ''}`.toLowerCase();
+          if (!haystack.includes(search)) return false;
+        }
+        if (segment && c.topic_tag !== segment) return false;
+        if (status === 'follow-up' && !c.needs_follow_up) return false;
+        return true;
+      });
+
+      document.getElementById('customers').innerHTML = renderCustomerRows(filtered);
+      return filtered;
+    }
+
+    function updateSegmentFilterOptions(customers) {
+      const select = document.getElementById('customer-segment-filter');
+      const current = select.value;
+      const segments = [...new Set(customers.map(c => c.topic_tag))].sort();
+      select.innerHTML = '<option value="">セグメント：すべて</option>' +
+        segments.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      select.value = segments.includes(current) ? current : '';
+    }
+
+    function csvEscape(value) {
+      const str = String(value ?? '');
+      return /[",\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+    }
+
+    function exportCustomersCsv() {
+      const rows = applyCustomerFilters();
+      const fieldNames = rows.length ? Object.keys(rows[0].custom_fields || {}) : [];
+      const headers = ['Display Name', 'User ID', 'Followed At', 'Messages', 'FAQ hit rate', 'Segment', 'Tags', 'Needs Follow Up', ...fieldNames];
+      const lines = [headers.map(csvEscape).join(',')];
+      for (const c of rows) {
+        lines.push([
+          c.display_name, c.user_id, c.followed_at, c.message_count,
+          c.faq_hit_rate === null ? '' : c.faq_hit_rate,
+          c.topic_tag, c.tags || '', c.needs_follow_up ? 'Yes' : 'No',
+          ...fieldNames.map(f => (c.custom_fields || {})[f] || ''),
+        ].map(csvEscape).join(','));
+      }
+      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'customers_' + new Date().toISOString().slice(0, 10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('customer-search').addEventListener('input', applyCustomerFilters);
+    document.getElementById('customer-segment-filter').addEventListener('change', applyCustomerFilters);
+    document.getElementById('customer-status-filter').addEventListener('change', applyCustomerFilters);
+    document.getElementById('customer-csv-export').addEventListener('click', exportCustomersCsv);
 
     function openList(kind) {
       let title, list;
@@ -383,6 +484,8 @@
       document.getElementById('modal-memo').value = '';
       document.getElementById('modal-memo-status').textContent = '';
       document.getElementById('modal-follow-up').checked = false;
+      document.getElementById('modal-tags').value = '';
+      document.getElementById('modal-custom-fields').innerHTML = '';
       document.getElementById('modal-messages').innerHTML = '<p class="empty">Loading…</p>';
 
       try {
@@ -400,6 +503,13 @@
         document.getElementById('modal-topic-tag').textContent = data.topicTag;
         document.getElementById('modal-memo').value = data.customer.memo || '';
         document.getElementById('modal-follow-up').checked = !!data.customer.needs_follow_up;
+        document.getElementById('modal-tags').value = data.customer.tags || '';
+        document.getElementById('modal-custom-fields').innerHTML = data.customFields.map(f => `
+          <div class="custom-field-group">
+            <label>${escapeHtml(f.name)}</label>
+            <input type="text" class="custom-field-input" data-field-id="${f.id}" value="${escapeHtml(f.value || '')}">
+          </div>
+        `).join('');
         document.getElementById('modal-messages').innerHTML = renderTable(
           ['Message', 'Time', 'FAQ matched'],
           data.messages.map(m => [m.text, fmt(m.timestamp), m.faq_matched ? 'Yes' : 'No']),
@@ -420,12 +530,17 @@
       if (!currentUserId) return;
       const status = document.getElementById('modal-memo-status');
       const memo = document.getElementById('modal-memo').value;
+      const tags = document.getElementById('modal-tags').value;
+      const customFields = {};
+      document.querySelectorAll('#modal-custom-fields [data-field-id]').forEach(input => {
+        customFields[input.dataset.fieldId] = input.value;
+      });
       status.textContent = '保存中…';
       try {
         const res = await fetch('/api/customers/' + encodeURIComponent(currentUserId), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ memo }),
+          body: JSON.stringify({ memo, tags, customFields }),
         });
         status.textContent = res.ok ? '保存しました' : '保存に失敗しました';
       } catch (e) {
@@ -538,11 +653,72 @@
       }
     });
 
+    function renderCustomFieldDefsTable(fields) {
+      if (!fields.length) return '<p class="empty">項目はまだありません。下のフォームから追加してください。</p>';
+      const rows = fields.map(f => `
+        <tr data-field-id="${f.id}">
+          <td>${escapeHtml(f.name)}</td>
+          <td class="faq-row-actions"><button class="secondary custom-field-delete">削除</button></td>
+        </tr>
+      `).join('');
+      return `<table><thead><tr><th>項目名</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    async function loadCustomFieldDefs() {
+      document.getElementById('custom-field-table-container').innerHTML = '<p class="empty">Loading…</p>';
+      try {
+        const { fields } = await fetch('/api/custom-fields').then(r => r.json());
+        document.getElementById('custom-field-table-container').innerHTML = renderCustomFieldDefsTable(fields);
+      } catch (e) {
+        console.error(e);
+        document.getElementById('custom-field-table-container').innerHTML = '<p class="empty">読み込みに失敗しました</p>';
+      }
+    }
+
+    document.getElementById('custom-field-table-container').addEventListener('click', async (e) => {
+      const row = e.target.closest('tr[data-field-id]');
+      if (!row || !e.target.classList.contains('custom-field-delete')) return;
+      if (!confirm('この項目を削除しますか？（既存の値も削除されます）')) return;
+      try {
+        await fetch('/api/custom-fields/' + row.dataset.fieldId, { method: 'DELETE' });
+        loadCustomFieldDefs();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    document.getElementById('new-custom-field-add').addEventListener('click', async () => {
+      const name = document.getElementById('new-custom-field-name').value;
+      if (!name.trim()) {
+        alert('項目名を入力してください');
+        return;
+      }
+      try {
+        const res = await fetch('/api/custom-fields', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          alert(err.error || '追加に失敗しました');
+          return;
+        }
+        document.getElementById('new-custom-field-name').value = '';
+        loadCustomFieldDefs();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
     function switchView(view) {
       document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
       document.getElementById('view-' + view).classList.add('active');
       document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === view));
-      if (view === 'faq') loadFaqs();
+      if (view === 'faq') {
+        loadFaqs();
+        loadCustomFieldDefs();
+      }
     }
 
     document.querySelectorAll('.nav-item').forEach(btn => {
@@ -559,7 +735,8 @@
         document.getElementById('faq-hit-rate').textContent = faqHitRate === null ? '—' : faqHitRate + '%';
 
         lastCustomers = customers;
-        document.getElementById('customers').innerHTML = renderCustomerRows(customers);
+        updateSegmentFilterOptions(customers);
+        applyCustomerFilters();
 
         document.getElementById('messages').innerHTML = renderTable(
           ['From', 'Message', 'Time'],

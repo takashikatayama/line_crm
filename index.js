@@ -137,6 +137,7 @@ app.get('/api/stats', (req, res) => {
         c.display_name,
         c.followed_at,
         c.needs_follow_up,
+        c.tags,
         COUNT(m.id) AS message_count,
         SUM(CASE WHEN m.faq_matched = 1 THEN 1 ELSE 0 END) AS faq_matched_count
       FROM customers c
@@ -152,10 +153,19 @@ app.get('/api/stats', (req, res) => {
     (allMessagesByUser[m.user_id] ??= []).push(m);
   }
 
-  const customersWithTags = customers.map((c) => ({
+  const fieldDefs = db.prepare('SELECT id, name FROM custom_field_defs ORDER BY id ASC').all();
+  const customFieldsByUser = {};
+  for (const v of db.prepare('SELECT user_id, field_id, value FROM custom_field_values').all()) {
+    (customFieldsByUser[v.user_id] ??= {})[v.field_id] = v.value;
+  }
+
+  const customersEnriched = customers.map((c) => ({
     ...c,
     faq_hit_rate: c.message_count > 0 ? Math.round((c.faq_matched_count / c.message_count) * 100) : null,
     topic_tag: topicTagFromMessages(allMessagesByUser[c.user_id] || []),
+    custom_fields: Object.fromEntries(
+      fieldDefs.map((f) => [f.name, (customFieldsByUser[c.user_id] || {})[f.id] ?? ''])
+    ),
   }));
 
   const messages = db
@@ -173,12 +183,17 @@ app.get('/api/stats', (req, res) => {
     messageCount,
     faqMatchedCount,
     faqHitRate,
-    customers: customersWithTags,
+    customers: customersEnriched,
     messages,
   });
 });
 
 app.use(express.json());
+
+const upsertCustomFieldValue = db.prepare(`
+  INSERT INTO custom_field_values (user_id, field_id, value) VALUES (@userId, @fieldId, @value)
+  ON CONFLICT(user_id, field_id) DO UPDATE SET value = @value
+`);
 
 app.patch('/api/customers/:userId', (req, res) => {
   const customer = db.prepare('SELECT user_id FROM customers WHERE user_id = ?').get(req.params.userId);
@@ -194,9 +209,47 @@ app.patch('/api/customers/:userId', (req, res) => {
     fields.push('needs_follow_up = @needsFollowUp');
     values.needsFollowUp = req.body.needsFollowUp ? 1 : 0;
   }
-  if (!fields.length) return res.status(400).json({ error: 'no valid fields to update' });
+  if (typeof req.body.tags === 'string') {
+    fields.push('tags = @tags');
+    values.tags = req.body.tags;
+  }
+  if (fields.length) {
+    db.prepare(`UPDATE customers SET ${fields.join(', ')} WHERE user_id = @userId`).run(values);
+  }
 
-  db.prepare(`UPDATE customers SET ${fields.join(', ')} WHERE user_id = @userId`).run(values);
+  if (req.body.customFields && typeof req.body.customFields === 'object') {
+    for (const [fieldId, value] of Object.entries(req.body.customFields)) {
+      upsertCustomFieldValue.run({ userId: req.params.userId, fieldId: Number(fieldId), value: String(value ?? '') });
+    }
+  }
+
+  if (!fields.length && !req.body.customFields) {
+    return res.status(400).json({ error: 'no valid fields to update' });
+  }
+  res.json({ ok: true });
+});
+
+app.get('/api/custom-fields', (req, res) => {
+  const fields = db.prepare('SELECT id, name FROM custom_field_defs ORDER BY id ASC').all();
+  res.json({ fields });
+});
+
+app.post('/api/custom-fields', (req, res) => {
+  const { name } = req.body;
+  if (typeof name !== 'string' || !name.trim()) return res.status(400).json({ error: 'name is required' });
+  try {
+    const result = db.prepare('INSERT INTO custom_field_defs (name) VALUES (?)').run(name.trim());
+    res.json({ id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(400).json({ error: 'a field with that name already exists' });
+  }
+});
+
+app.delete('/api/custom-fields/:id', (req, res) => {
+  const field = db.prepare('SELECT id FROM custom_field_defs WHERE id = ?').get(req.params.id);
+  if (!field) return res.status(404).json({ error: 'not found' });
+  db.prepare('DELETE FROM custom_field_values WHERE field_id = ?').run(req.params.id);
+  db.prepare('DELETE FROM custom_field_defs WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
@@ -295,7 +348,7 @@ app.delete('/api/faqs/:id', (req, res) => {
 
 app.get('/api/customers/:userId', (req, res) => {
   const customer = db
-    .prepare('SELECT user_id, display_name, followed_at, unfollowed_at, memo, needs_follow_up FROM customers WHERE user_id = ?')
+    .prepare('SELECT user_id, display_name, followed_at, unfollowed_at, memo, needs_follow_up, tags FROM customers WHERE user_id = ?')
     .get(req.params.userId);
 
   if (!customer) return res.status(404).json({ error: 'not found' });
@@ -309,7 +362,16 @@ app.get('/api/customers/:userId', (req, res) => {
   const faqHitRate = messageCount > 0 ? Math.round((faqMatchedCount / messageCount) * 100) : null;
   const topicTag = topicTagFromMessages(messages);
 
-  res.json({ customer, messageCount, faqMatchedCount, faqHitRate, topicTag, messages });
+  const customFields = db
+    .prepare(`
+      SELECT d.id, d.name, v.value
+      FROM custom_field_defs d
+      LEFT JOIN custom_field_values v ON v.field_id = d.id AND v.user_id = ?
+      ORDER BY d.id ASC
+    `)
+    .all(req.params.userId);
+
+  res.json({ customer, messageCount, faqMatchedCount, faqHitRate, topicTag, customFields, messages });
 });
 
 const PORT = process.env.PORT || 3000;
