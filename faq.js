@@ -1,11 +1,15 @@
-const fs = require('fs');
-const path = require('path');
+const db = require('./db');
 
-const faqs = JSON.parse(fs.readFileSync(path.join(__dirname, 'faqs.json'), 'utf8'));
+function getActiveFaqs() {
+  return db
+    .prepare('SELECT id, label, keywords, answer FROM faqs WHERE active = 1')
+    .all()
+    .map((f) => ({ ...f, keywords: f.keywords.split(',').map((k) => k.trim()).filter(Boolean) }));
+}
 
 function findMatch(text) {
   const lower = text.toLowerCase();
-  return faqs.find((faq) => faq.keywords.some((k) => lower.includes(k.toLowerCase()))) || null;
+  return getActiveFaqs().find((faq) => faq.keywords.some((k) => lower.includes(k.toLowerCase()))) || null;
 }
 
 function matchFaq(text) {

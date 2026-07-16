@@ -136,6 +136,7 @@ app.get('/api/stats', (req, res) => {
         c.user_id,
         c.display_name,
         c.followed_at,
+        c.needs_follow_up,
         COUNT(m.id) AS message_count,
         SUM(CASE WHEN m.faq_matched = 1 THEN 1 ELSE 0 END) AS faq_matched_count
       FROM customers c
@@ -179,23 +180,30 @@ app.get('/api/stats', (req, res) => {
 
 app.use(express.json());
 
-const updateMemo = db.prepare('UPDATE customers SET memo = @memo WHERE user_id = @userId');
-
 app.patch('/api/customers/:userId', (req, res) => {
   const customer = db.prepare('SELECT user_id FROM customers WHERE user_id = ?').get(req.params.userId);
   if (!customer) return res.status(404).json({ error: 'not found' });
 
-  if (typeof req.body.memo !== 'string') {
-    return res.status(400).json({ error: 'memo must be a string' });
+  const fields = [];
+  const values = { userId: req.params.userId };
+  if (typeof req.body.memo === 'string') {
+    fields.push('memo = @memo');
+    values.memo = req.body.memo;
   }
-  updateMemo.run({ userId: req.params.userId, memo: req.body.memo });
+  if (typeof req.body.needsFollowUp === 'boolean') {
+    fields.push('needs_follow_up = @needsFollowUp');
+    values.needsFollowUp = req.body.needsFollowUp ? 1 : 0;
+  }
+  if (!fields.length) return res.status(400).json({ error: 'no valid fields to update' });
+
+  db.prepare(`UPDATE customers SET ${fields.join(', ')} WHERE user_id = @userId`).run(values);
   res.json({ ok: true });
 });
 
 app.get('/api/faq-insight', (req, res) => {
   const messages = db
     .prepare(`
-      SELECT messages.user_id, customers.display_name, messages.text, messages.timestamp
+      SELECT messages.id, messages.user_id, customers.display_name, messages.text, messages.timestamp, messages.handled
       FROM messages
       LEFT JOIN customers ON customers.user_id = messages.user_id
       ORDER BY messages.id DESC
@@ -208,7 +216,7 @@ app.get('/api/faq-insight', (req, res) => {
     const category = matchFaqCategory(m.text);
     if (category) {
       categoryCounts[category] = (categoryCounts[category] || 0) + 1;
-    } else {
+    } else if (!m.handled) {
       unmatchedMessages.push(m);
     }
   }
@@ -219,15 +227,75 @@ app.get('/api/faq-insight', (req, res) => {
 
   res.json({
     totalMessages: messages.length,
-    matchedCount: messages.length - unmatchedMessages.length,
+    matchedCount: messages.length - unmatchedMessages.length - messages.filter((m) => m.handled).length,
     categoryBreakdown,
     unmatchedMessages: unmatchedMessages.slice(0, 50),
   });
 });
 
+app.patch('/api/messages/:id', (req, res) => {
+  const message = db.prepare('SELECT id FROM messages WHERE id = ?').get(req.params.id);
+  if (!message) return res.status(404).json({ error: 'not found' });
+  if (typeof req.body.handled !== 'boolean') return res.status(400).json({ error: 'handled must be boolean' });
+
+  db.prepare('UPDATE messages SET handled = ? WHERE id = ?').run(req.body.handled ? 1 : 0, req.params.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/faqs', (req, res) => {
+  const faqs = db.prepare('SELECT id, label, keywords, answer, active FROM faqs ORDER BY id ASC').all();
+  res.json({ faqs });
+});
+
+app.post('/api/faqs', (req, res) => {
+  const { label, keywords, answer } = req.body;
+  if (typeof label !== 'string' || !label.trim()) return res.status(400).json({ error: 'label is required' });
+  if (typeof keywords !== 'string' || !keywords.trim()) return res.status(400).json({ error: 'keywords is required' });
+  if (typeof answer !== 'string' || !answer.trim()) return res.status(400).json({ error: 'answer is required' });
+
+  const result = db
+    .prepare('INSERT INTO faqs (label, keywords, answer, active) VALUES (?, ?, ?, 1)')
+    .run(label.trim(), keywords.trim(), answer.trim());
+  res.json({ id: result.lastInsertRowid });
+});
+
+app.patch('/api/faqs/:id', (req, res) => {
+  const faq = db.prepare('SELECT id FROM faqs WHERE id = ?').get(req.params.id);
+  if (!faq) return res.status(404).json({ error: 'not found' });
+
+  const fields = [];
+  const values = [];
+  if (typeof req.body.label === 'string' && req.body.label.trim()) {
+    fields.push('label = ?');
+    values.push(req.body.label.trim());
+  }
+  if (typeof req.body.keywords === 'string' && req.body.keywords.trim()) {
+    fields.push('keywords = ?');
+    values.push(req.body.keywords.trim());
+  }
+  if (typeof req.body.answer === 'string' && req.body.answer.trim()) {
+    fields.push('answer = ?');
+    values.push(req.body.answer.trim());
+  }
+  if (typeof req.body.active === 'boolean') {
+    fields.push('active = ?');
+    values.push(req.body.active ? 1 : 0);
+  }
+  if (!fields.length) return res.status(400).json({ error: 'no valid fields to update' });
+
+  db.prepare(`UPDATE faqs SET ${fields.join(', ')} WHERE id = ?`).run(...values, req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/faqs/:id', (req, res) => {
+  const result = db.prepare('DELETE FROM faqs WHERE id = ?').run(req.params.id);
+  if (result.changes === 0) return res.status(404).json({ error: 'not found' });
+  res.json({ ok: true });
+});
+
 app.get('/api/customers/:userId', (req, res) => {
   const customer = db
-    .prepare('SELECT user_id, display_name, followed_at, unfollowed_at, memo FROM customers WHERE user_id = ?')
+    .prepare('SELECT user_id, display_name, followed_at, unfollowed_at, memo, needs_follow_up FROM customers WHERE user_id = ?')
     .get(req.params.userId);
 
   if (!customer) return res.status(404).json({ error: 'not found' });
