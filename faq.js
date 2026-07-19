@@ -1,33 +1,24 @@
-const db = require('./db');
-
-function getActiveFaqs() {
-  return db
-    .prepare('SELECT id, label, keywords, answer FROM faqs WHERE active = 1')
-    .all()
-    .map((f) => ({ ...f, keywords: f.keywords.split(',').map((k) => k.trim()).filter(Boolean) }));
-}
-
-function findMatch(text) {
+function findMatch(activeFaqs, text) {
   const lower = text.toLowerCase();
-  return getActiveFaqs().find((faq) => faq.keywords.some((k) => lower.includes(k.toLowerCase()))) || null;
+  return activeFaqs.find((faq) => faq.keywords.some((k) => lower.includes(k.toLowerCase()))) || null;
 }
 
-function matchFaq(text) {
-  const match = findMatch(text);
+function matchFaq(activeFaqs, text) {
+  const match = findMatch(activeFaqs, text);
   return match ? match.answer : null;
 }
 
-function matchFaqCategory(text) {
-  const match = findMatch(text);
+function matchFaqCategory(activeFaqs, text) {
+  const match = findMatch(activeFaqs, text);
   return match ? match.label : null;
 }
 
 // Rule-based topic tag: whichever FAQ category a customer's messages hit most
 // often. No AI/NLP — plain keyword matching, same as the auto-reply logic.
-function topicTagFromMessages(messages) {
+function topicTagFromMessages(activeFaqs, messages) {
   const counts = {};
   for (const m of messages) {
-    const category = matchFaqCategory(m.text);
+    const category = matchFaqCategory(activeFaqs, m.text);
     if (category) counts[category] = (counts[category] || 0) + 1;
   }
   let topTag = null;

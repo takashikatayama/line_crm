@@ -4,12 +4,19 @@
   "description": "LINE webhook server — echo bot + event storage + dashboard",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "migrate-data": "node scripts/migrate-to-postgres.js"
   },
   "dependencies": {
     "@line/bot-sdk": "^7",
-    "better-sqlite3": "^12.11.1",
     "dotenv": "^16",
-    "express": "^4"
+    "express": "^4",
+    "pg": "^8"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^12.11.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true
   }
 }
