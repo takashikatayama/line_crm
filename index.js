@@ -380,15 +380,34 @@ app.get('/api/customers/:userId', asyncRoute(async (req, res) => {
   res.json({ customer, messageCount, faqMatchedCount, faqHitRate, topicTag, customFields, messages });
 }));
 
-const PORT = process.env.PORT || 3000;
+const migrationPromise = migrate().catch((err) => {
+  console.error('Migration failed:', err);
+  throw err;
+});
 
-migrate()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Listening on http://localhost:${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Migration failed:', err);
-    process.exit(1);
-  });
+// Render/local: keep running a normal persistent server.
+// Vercel: no app.listen() — the platform calls the exported handler per request.
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 3000;
+  migrationPromise
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Listening on http://localhost:${PORT}`);
+      });
+    })
+    .catch(() => process.exit(1));
+}
+
+module.exports = async (req, res) => {
+  await migrationPromise;
+  app(req, res);
+};
+
+// LINE's webhook signature check needs the raw request body, so Vercel's
+// automatic JSON body-parsing must stay off (express.json()/line.middleware
+// do their own parsing further down the chain).
+module.exports.config = {
+  api: {
+    bodyParser: false,
+  },
+};
